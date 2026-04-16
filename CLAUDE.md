@@ -2,12 +2,41 @@
 
 Guidance for Claude Code when modifying this MCP server codebase.
 
+## ⚠️ CRITICAL: Version Structure
+
+**This repository uses a versioning structure. READ THIS CAREFULLY:**
+
+```
+tiny-mcp-server/
+├── src/                    ← CURRENT VERSION - WORK HERE ONLY
+├── versions/
+│   ├── v1/                 ← ARCHIVED (previous iteration)
+│   ├── v2/                 ← ARCHIVED (if it exists)
+│   └── ...
+├── VERSIONS.md             ← Overview of all versions
+└── ARCHITECTURE_EVOLUTION.md ← Why versions changed
+```
+
+### Rules for Claude Code:
+1. **ALWAYS work in `/src`** - This is the current version
+2. **NEVER read from `/versions/`** unless explicitly asked to compare versions
+3. **NEVER modify anything in `/versions/`** - These are archived and frozen
+4. **When asked "show me the code"** - Reference `/src`, not `/versions/`
+5. **When asked "what's new"** - Check VERSIONS.md and ARCHITECTURE_EVOLUTION.md
+
+### When to Reference `/versions/`:
+- ✅ User explicitly asks: "Compare v1 and v2"
+- ✅ User asks: "What changed between versions?"
+- ❌ Don't: Accidentally include old version info in answers
+- ❌ Don't: Copy patterns from old versions without noting the version change
+
 ## Quick Context
 
-- **Project**: Tiny MCP Server - a learning project for building MCP servers
+- **Project**: Tiny MCP Server - a learning project for building MCP servers (currently v1)
 - **Tech**: TypeScript, Node.js 24+, SQLite (sql.js), Zod, McpServer SDK
 - **Purpose**: Expose read-only database query tools to Claude Desktop
 - **Use Case**: Hotel review analytics across 5 French cities
+- **Current Version**: v1 (in `/src`)
 
 See README.md for full project overview, setup, and usage.
 
@@ -133,13 +162,20 @@ When modifying existing code:
 - [ ] Don't commit without testing in MCP Inspector first
 - [ ] Ensure changes don't break other tools
 
-## File Ownership
+## File Ownership (Current Version in `/src`)
 
+**Current version files (always in `/src/`):**
 - `src/index.ts` — Tool registration (central point for all tools)
 - `src/tools/*.ts` — Individual tool implementations
 - `src/db.ts` — Database initialization (don't modify unless needed)
 - `src/scripts/seed.ts` — Sample data (modify to change hotel reviews)
 - `dist/` — Compiled output (generated, never edit directly)
+
+**Version control files:**
+- `VERSIONS.md` — Document changes between versions (update when creating v2, v3, etc.)
+- `ARCHITECTURE_EVOLUTION.md` — Explain architectural decisions and changes
+- `versions/v1/` — Frozen copy of v1 (never modify)
+- `versions/v2/` — Frozen copy of v2 when it exists (never modify)
 
 ## Before Asking for Help
 

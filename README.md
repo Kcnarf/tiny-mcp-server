@@ -2,6 +2,9 @@
 
 A minimal exploration of building an **Model Context Protocol (MCP) Server** with Node.js, SQLite, and Claude Desktop integration.
 
+> **Current Version**: v1 (code in `/src`)  
+> See [VERSIONS.md](VERSIONS.md) for all versions | [ARCHITECTURE_EVOLUTION.md](ARCHITECTURE_EVOLUTION.md) for design decisions
+
 ## Objective
 
 This project serves as a learning experiment to understand:
