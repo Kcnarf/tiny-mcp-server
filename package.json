@@ -1,22 +1,26 @@
 {
   "name": "tiny-mcp-server",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "A simple MCP server with SQLite database",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "echo \"Error: MCP server should be started by the MCP Host, and not in a standalone manner\" && exit 1",
+    "start:local": "echo \"Error: local stdio-based MCP Server should be started by the MCP Host as a subprocess. Use `start:remote` to start a standalone HTTPS MCP server\" && exit 1",
+    "start:remote": "node dist/index.js --remote",
     "seed": "tsx src/scripts/seed.ts",
-    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
+    "inspect:local": "npx @modelcontextprotocol/inspector node dist/index.js",
+    "inspect:remote": "npx @modelcontextprotocol/inspector",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "express": "^4.18.0",
     "sql.js": "^1.10.3"
   },
   "devDependencies": {
+    "@types/express": "^4.17.0",
     "@types/node": "^20.11.0",
     "@types/sql.js": "^1.4.9",
     "typescript": "^5.3.3",

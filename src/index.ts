@@ -1,5 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import express from 'express';
 import { z } from 'zod';
 
 import { query, type QueryInput } from './tools/query.js';
@@ -69,9 +71,31 @@ server.registerTool(
 
 // Start the server
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error('MCP Server started');
+  const isRemote = process.argv.includes('--remote');
+
+  if (isRemote) {
+    const PORT = 3001;
+    const app = express();
+    app.use(express.json());
+
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+    });
+
+    await server.connect(transport);
+
+    app.all('/mcp', async (req, res) => {
+      await transport.handleRequest(req, res, req.body);
+    });
+
+    app.listen(PORT, 'localhost', () => {
+      console.error(`MCP HTTP Server started on http://localhost:${PORT}/mcp`);
+    });
+  } else {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error('MCP Server started (stdio)');
+  }
 }
 
 // Handle graceful shutdown
