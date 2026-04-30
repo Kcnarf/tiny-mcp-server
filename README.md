@@ -2,8 +2,25 @@
 
 A minimal exploration of building an **Model Context Protocol (MCP) Server** with Node.js, SQLite, and Claude Desktop integration.
 
-> **Current Version**: v1 (code in `/src`)  
+> **Current Version**: v2 (code in `/src`)  
 > See [VERSIONS.md](VERSIONS.md) for all versions | [ARCHITECTURE_EVOLUTION.md](ARCHITECTURE_EVOLUTION.md) for design decisions
+
+## Server Modes
+
+This MCP server supports **two communication modes**:
+
+1. **Local Stdio Mode** (default)
+   - MCP Host (e.g., Claude Desktop) starts the server as a subprocess
+   - Communication via stdin/stdout
+   - Best for local development and Claude Desktop integration
+   - Usage: `node dist/index.js` (no flags)
+
+2. **Remote HTTP-Streamable Mode**
+   - Standalone HTTP server accepting JSON-RPC over HTTP
+   - Each request gets a fresh, isolated MCP server instance (stateless)
+   - Suitable for cloud deployment (e.g., Replit)
+   - Usage: `node dist/index.js --remote` or `MCP_TRANSPORT=http`
+   - Default port: 5000 (configurable via `PORT` env var)
 
 ## Objective
 
@@ -93,7 +110,23 @@ yarn run seed
 yarn run build
 ```
 
-**Note**: The MCP server is started by the MCP Host (e.g., Claude Desktop) as a subprocess, not directly. See [Claude Desktop Integration](#claude-desktop-integration) below.
+### Running the Server
+
+**Local Stdio Mode** (for Claude Desktop):
+```bash
+node dist/index.js
+```
+
+**Remote HTTP Mode** (for cloud deployment):
+```bash
+# Using --remote flag
+node dist/index.js --remote
+
+# Or using environment variable
+MCP_TRANSPORT=http PORT=3000 HOST=0.0.0.0 node dist/index.js
+```
+
+**Note**: In local stdio mode, the MCP server is started by the MCP Host (e.g., Claude Desktop) as a subprocess, not directly. See [Claude Desktop Integration](#claude-desktop-integration) below.
 
 ### Database Schema
 
@@ -155,14 +188,14 @@ yarn
 
 Claude Desktop automatically starts the MCP server as a subprocess based on the configuration below. You do **not** manually start the server.
 
-### Configure Claude Desktop
+### Configure Claude Desktop for local stdio-based MCP Server
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS):
 
 ```json
 {
   "mcpServers": {
-    "tiny-mcp-server": {
+    "local tiny-mcp-server (stdio)": {
       "command": "node",
       "args": ["/path/to/tiny-mcp-server/dist/index.js"],
       "env": {
@@ -172,6 +205,27 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
   }
 }
 ```
+
+### Configure Claude Desktop for remote HTTP-Streamble MCP Server
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS):
+
+```json
+{
+  "mcpServers": {
+    "remote tiny-mcp-server (HTTP Streamable)": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://8cf40eb2-f246-4e9f-b3f3-96bcb45db89d-00-z7uripd5th2g.kirk.replit.dev/mcp"
+      ]
+    }
+  }
+}
+```
+Note 1: Claude Desktop requires a non-self-signed HTTPS certificate for remote servers. I choose to deploy the remote HTTP Streamable MCP Server using Replit (more on this later in this doc).
+
+Note 2: in the context of this experimentation, I choose to NOT \`publish\` a long living server. So I use an so-called \`developement url\`, available only when the Replit project is active (i.e. under development/usage). The developement url changes everytime the Replit project restarts. The url in the above code sample is here just for the sake of example.
 
 ### Usage in Claude Desktop
 
@@ -191,22 +245,112 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 - Receives results
 - Presents analysis and can create visualizations
 
+## Deploying to Replit
+
+Claude Desktop requires a valid (non-self-signed) HTTPS certificate for remote servers. **Replit solves this automatically** by providing HTTPS at the edge via a reverse proxy.
+
+### How It Works
+
+```
+Claude Desktop (HTTPS request)
+    ↓
+Replit Edge (HTTPS reverse proxy)
+    ↓ (forwards as HTTP internally)
+Your MCP Server (plain HTTP on port 5000)
+```
+
+Replit handles:
+- ✅ Public HTTPS URL with valid certificate
+- ✅ Reverse proxy forwarding to your internal HTTP server
+- ✅ SSL/TLS termination
+
+### Deployment Steps
+
+1. **Push code to GitHub** (Replit imports from GitHub)
+2. **Create Replit project** from your GitHub repository
+3. **Configure `package.json`** with start command:
+   ```json
+   "start": "yarn build && node dist/index.js --remote"
+   ```
+4. **Run on Replit** — the provided public HTTPS URL is your MCP server URL
+5. **Configure Claude Desktop** with that URL (see [Claude Desktop Integration](#claude-desktop-integration))
+
+
 ## Key Learning Points
 
-- **MCP Protocol**: Tools are exposed via JSON-RPC over stdio
-- **Schema Validation**: Zod is used to validate tool parameters; schemas must be Zod objects
-- **Debugging**: MCP Inspector is invaluable for testing before Claude Desktop integration
-- **How MCP Bridges Remote LLM and Local Tools**: The architecture combines remote HTTP communication (user ↔ LLM) with local stdio communication (MCP Host ↔ MCP Server):
-   1. User asks a question to Claude Desktop
-   2. Claude Desktop sends the question to the **remote** LLM (e.g., Claude Sonnet) via HTTP
-   3. The LLM analyzes the question, identifies missing data, and requests an MCP tool call
-   4. Claude Desktop receives the tool request and calls the **local** MCP Server via stdio
-   5. The local MCP Server processes the request and returns data via stdio
-   6. Claude Desktop sends the data back to the remote LLM via HTTP
-   7. The remote LLM computes its final response and sends it to Claude Desktop via HTTP
-   8. Claude Desktop presents the final response to the user
-   
-   **Note**: At step 5, when the local MCP Server processes the request, it may fetch cloud-based data using HTTP (e.g., retrieve Trip Advisor reviews). The tool's HTTP calls are independent of the MCP Host's HTTP communication with the remote LLM.
+### MCP Protocol Fundamentals
+- **MCP Protocol**: Tools are exposed via JSON-RPC (default: stdio, alternative: HTTP-Streamable)
+- **Schema Validation**: Zod is used to validate tool parameters; schemas must be Zod objects, not raw JSON Schema
+- **Debugging**: MCP Inspector is invaluable for testing tools locally before deployment
+
+### How MCP Bridges Remote LLM and Local/Remote Tools
+
+The architecture elegantly combines **multiple communication layers**:
+
+1. **User → Claude Desktop** (UI, local)
+2. **Claude Desktop ↔ Remote LLM** (HTTPS, e.g., Claude Sonnet)
+3. **Claude Desktop ↔ Local/Remote MCP Server** (stdio or HTTPS)
+4. **MCP Server → External Data** (HTTP/SQL/APIs)
+
+**Example Flow** (local stdio mode):
+1. User asks Claude Desktop: *"What's the average review score for Paris hotels?"*
+2. Claude Desktop sends question to remote LLM via HTTPS
+3. Remote LLM analyzes, identifies missing data, requests `query` tool call via MCP protocol
+4. Claude Desktop calls local MCP Server via stdio (subprocess)
+5. MCP Server executes SQL query against local SQLite database, returns results
+6. Claude Desktop sends results back to remote LLM via HTTPS
+7. Remote LLM formulates final response, sends to Claude Desktop via HTTPS
+8. Claude Desktop displays response to user
+
+**With Remote Server** (Replit + HTTP-Streamable):
+- Steps 1-2 unchanged
+- Step 4: Claude Desktop calls **remote** HTTP MCP Server via HTTPS (Replit provides TLS)
+- Steps 5-8 unchanged
+
+**Key Insight**: MCP decouples **tool location** from **LLM location**. Tools can be local (stdio, fast) or remote (HTTP, distributed).
+
+### Stateless Server Architecture for HTTP Transport
+
+The **HTTP-Streamable transport is fundamentally stateless** — each HTTP request must be a **complete, independent MCP protocol session**.
+
+**❌ Problem with Shared Instance:**
+
+Even a **single MCP Host** making sequential HTTP requests fails with a shared server instance:
+
+```
+Request 1: initialize
+  └─ Server state updated
+  
+Request 2: tools/list
+  └─ Transport expects fresh state
+  └─ But transport remembers state from Request 1
+  └─ ERROR: Protocol violation
+```
+
+The `StreamableHTTPServerTransport` is designed for **one-request-equals-one-session semantics**. Sharing the transport instance across HTTP requests causes the transport to inherit leftover state from the previous request, violating the MCP protocol's expected flow.
+
+**✅ Solution: Per-Request Instance:**
+
+Create a fresh MCP server + transport for **each HTTP request**, ensuring complete isolation:
+
+```
+Request 1: initialize
+  - Fresh server + transport created
+  - Protocol executes and completes
+  - State is destroyed with response
+  
+Request 2: tools/list (pristine)
+  - Fresh server + transport created  
+  - Protocol executes cleanly
+  - No leftover state from Request 1
+```
+
+**Implementation**: In `src/index.ts`, the `/mcp` route handler:
+1. Creates a fresh `createServer()` instance per request
+2. Instantiates new `StreamableHTTPServerTransport` per request
+3. Registers `res.on('close', cleanup)` to free resources immediately when response ends
+
+Each HTTP request is a **completely independent MCP session with zero state carryover** from previous requests.
 
 ## References
 
@@ -218,12 +362,15 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 ## Next Steps for Experimentation
 
 1. **Add more tools**:
-  - Implement Tools for aggregations (AVG, COUNT, etc.)
-  - Implement Business Tools : extend tools to fulfill business needs reacting to specific wording (e.g. "NPS score", which is percentage of promoters - percentage of detractor)
-  - Implement DataViz Tools: extend tools to generate charts/graphs
-2. **Add MCP Resources and MCP Prompts**
-3. **Remote MCP Server**: Replace stdio with WebSockets or HTTP or dual SSE (dual/bidirectionnal Server Sent Event) to enable the MCP Host to communicate with a **remote** MCP Server (e.g., running on a different machine). This enables cloud-based tool access and distributed architectures.
-4. **Multi-table queries**: Create tools that join complex data
+   - Implement tools for aggregations (AVG, COUNT, etc.)
+   - Implement Business Tools: extend tools to fulfill business needs reacting to specific wording (e.g., "NPS score")
+   - Implement DataViz Tools: extend tools to generate charts/graphs
+
+2. **Add MCP Resources and MCP Prompts**: Extend the server with resource lists and custom prompts
+
+3. **Multi-table queries**: Create tools that join complex data across tables
+
+4. **Authentication**: Add API key or token-based authentication for remote server deployments
 
 ---
 
