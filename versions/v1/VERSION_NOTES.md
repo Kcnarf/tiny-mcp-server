@@ -1,37 +1,23 @@
 # Version 1 - Snapshot
 
-This is a backup of the tiny-mcp-server at the point where **dual-mode transport support** was added.
+This is a backup of the tiny-mcp-server 
 
 ## What's in This Version
 
-- **Database**: SQLite (sql.js) - in-process, no external server
-- **Tools**: 2 tools (`query` for SELECT, `listTables` for schema listing)
-- **Operations**: Read-only (SELECT queries only)
-- **Transport Modes**: 
-  - **Stdio** (default) - for local MCP clients like Claude Desktop
-  - **HTTP** (with `--remote` flag) - standalone HTTP server on localhost:3000
-- **Schema Validation**: Zod schemas
-- **Data**: 20 hotel reviews across 5 French cities (French cities dataset)
+**Focus**: Learning MCP fundamentals with minimal complexity
 
-## Key Features Added in This Version
-
-### Dual-Mode Transport Support
-- Added `express` and `@types/express` dependencies
-- Implemented `StreamableHTTPServerTransport` from MCP SDK for HTTP mode
-- CLI flag `--remote` switches between modes
-- Default behavior (stdio) unchanged for backward compatibility
+| Aspect | Details |
+|--------|---------|
+| **Database** | SQLite (sql.js) - in-process, no external server |
+| **Tools** | 2 tools: `query` (SELECT), `listTables` (schema) |
+| **Operations** | Read-only (SELECT queries only) |
+| **Schema Validation** | Zod schemas |
+| **Transport** | stdio only (Claude Desktop subprocess) |
+| **Data** | 20 hotel reviews across 5 French cities |
+| **Use Case** | Analytics queries on hotel reviews |
 
 ### Usage
-
-**Stdio mode** (default, used by Claude Desktop):
-```bash
-node dist/index.js
-```
-
-**HTTP remote mode** (standalone server on localhost:3000):
-```bash
-node dist/index.js --remote
-```
+Ready to be used in an MCP Host, e.g. Claude Dektop.
 
 ## Files Structure
 
