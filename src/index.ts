@@ -90,6 +90,19 @@ async function main() {
       );
     });
 
+    // API key authentication middleware (optional, only if MCP_API_KEY is set)
+    const expectedKey = process.env.TINY_MCP_SERVER_API_KEY;
+    if (expectedKey) {
+      app.use('/mcp', (req, res, next) => {
+        const providedKey = req.query.tiny_mcp_server_api_key as string | undefined;
+        if (!providedKey || providedKey !== expectedKey) {
+          res.status(401).json({ error: 'Unauthorized: missing or invalid api_key' });
+          return;
+        }
+        next();
+      });
+    }
+
     // Stateless mode: create a fresh MCP server + transport per request so
     // sequential calls (initialize -> notifications/initialized -> tools/list -> tools/call)
     // each work correctly without sharing transport state across requests.
